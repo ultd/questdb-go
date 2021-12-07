@@ -10,18 +10,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type RowScanner interface {
-	Scan(dst ...interface{}) error
-}
-
-// ScanIntoer is an interface with a single method "ScanInto" which takes a
-// RowScanner. It's up to the end user how to Scan into the data using the RowScanner.
-type ScanIntoer interface {
-	ScanInto(scanner RowScanner) error
-}
-
-type NewScanintoer func() ScanIntoer
-
+// Config is a struct which holds Client's config fields
 type Config struct {
 	ilpHost   string
 	pgConnStr string
@@ -31,21 +20,24 @@ type Config struct {
 // protocol net.TCPConn as well as the Postgres wire *sql.DB connection. Methods on this
 // client are primarily used to read/write data to QuestDB.
 type Client struct {
-	config  Config
+	config Config
+	// ilpConn is the TCP connection which allows Client to write data to QuestDB
 	ilpConn *net.TCPConn
+	// pgSqlDB is the Postgres SQL DB connection which allows to read/query data from QuestDB
 	pgSqlDB *sql.DB
 }
 
-// Default
+// Default func returns a *Client with the default config as specified by QuestDB docs
 func Default() *Client {
 	return &Client{
 		config: Config{
 			ilpHost:   "localhost:9009",
-			pgConnStr: "postgresql://admin:quest@localhost:8812/qdb",
+			pgConnStr: "postgresql://admin:quest@localhost:8812/qdb?sslmode=disable",
 		},
 	}
 }
 
+// New func returns a *Client and an optional error given a Config
 func New(config Config) (*Client, error) {
 	return &Client{
 		config: config,
@@ -58,6 +50,8 @@ var (
 	ErrPGOpen               = errors.New("could not open postgres db")
 )
 
+// Connect func dials and connects both the Influx line protocol TCP connection as well
+// as the underlying sql pg database connection.
 func (c *Client) Connect() error {
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", c.config.ilpHost)
 	if err != nil {
@@ -81,6 +75,8 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// Close func closes both the Influx line protocol TCP connection as well as
+// the PG sql database connection
 func (c *Client) Close() error {
 	errs := []error{}
 	if err := c.pgSqlDB.Close(); err != nil {
@@ -104,45 +100,29 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) WriteRow(row string) error {
-	_, err := c.ilpConn.Write([]byte(fmt.Sprintf("%s\n", row)))
+// Write func takes a message and writes it to the underlying InfluxDB line protocol
+func (c *Client) Write(message string) error {
+	_, err := c.ilpConn.Write([]byte(message))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Client) QueryRow(ctx context.Context, query string, s ScanIntoer) error {
+// QueryRow func takes a context and a query statement and returns a *sql.Row after
+// executing the query to the underlying Postgres Wire protocol sql database connection
+func (c *Client) QueryRow(ctx context.Context, query string) *sql.Row {
 	row := c.pgSqlDB.QueryRowContext(ctx, query)
-	if err := row.Err(); err != nil {
-		return err
-	}
-
-	if err := s.ScanInto(row); err != nil {
-		return fmt.Errorf("could not scan: %w", err)
-	}
-
-	return nil
+	return row
 }
 
-func (c *Client) QueryRows(ctx context.Context, query string, dest *[]interface{}, new NewScanintoer) error {
+// QueryRows func takes a context and a query statement and returns a *sql.Rows and possible error
+// after executing the query to the underlying Postgres Wire protocol sql database connection
+func (c *Client) QueryRows(ctx context.Context, query string) (*sql.Rows, error) {
 	rows, err := c.pgSqlDB.QueryContext(ctx, query)
 	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		thing := new()
-		rows.Scan()
-		if err := thing.ScanInto(rows); err != nil {
-			return fmt.Errorf("could not scan: %w", err)
-		}
-		*dest = append(*dest, thing)
-	}
-	if rows.Err(); err != nil {
-		return fmt.Errorf("could not prepare next row: %w", err)
+		return nil, err
 	}
 
-	return nil
+	return rows, nil
 }
