@@ -13,23 +13,67 @@ const tagName = "qdb"
 type QuestDBType string
 
 var (
-	Boolean   QuestDBType = "boolean"
-	Byte      QuestDBType = "byte"
-	Short     QuestDBType = "short"
-	Char      QuestDBType = "char"
-	Int       QuestDBType = "int"
-	Float     QuestDBType = "float"
-	Symbol    QuestDBType = "symbol"
-	String    QuestDBType = "string"
-	Long      QuestDBType = "long"
-	Date      QuestDBType = "date"
+	// boolean (true or false)
+	Boolean QuestDBType = "boolean"
+	// 8 bit signed integer (-128 to 127)
+	Byte QuestDBType = "byte"
+	// 16-bit signed integer (-32768 to 32767)
+	Short QuestDBType = "short"
+	// 16-bit unicode charachter (unsupported)
+	Char QuestDBType = "char"
+	// 32-bit signed integer (0x80000000 to 0x7fffffff)
+	Int QuestDBType = "int"
+	// 32-bit float (float32 - single precision IEEE 754)
+	Float QuestDBType = "float"
+	// variable length string (see QuestDB docs)
+	Symbol QuestDBType = "symbol"
+	// variable length string
+	String QuestDBType = "string"
+	// 64-bit signed integer (0x8000000000000000L to 0x7fffffffffffffffL)
+	Long QuestDBType = "long"
+	// 64-bit signed offset in milliseconds from Unix Epoch
+	Date QuestDBType = "date"
+	// 64-bit signed offset in microseconds from Unix Epoch
 	Timestamp QuestDBType = "timestamp"
-	Double    QuestDBType = "double"
-	Binary    QuestDBType = "binary"
-	Long256   QuestDBType = "long256"
+	// 64-bit float (float64 - double precision IEEE 754)
+	Double QuestDBType = "double"
+	// byte array (unsupported)
+	Binary QuestDBType = "binary"
+	// 256-bit unsigned integer (unsupported)
+	Long256 QuestDBType = "long256"
+	// Geohash (unsupported)
+	Geohash QuestDBType = "geohash"
 )
 
-var supportedKinds = []string{
+// var questDBTypeToReflectKind = map[QuestDBType]reflect.Kind{
+// 	Boolean:   reflect.Bool,
+// 	Byte:      reflect.Int8,
+// 	Short:     reflect.Int16,
+// 	Char:      reflect.Int32,
+// 	Int:       reflect.Int32,
+// 	Float:     reflect.Float32,
+// 	Symbol:    reflect.String,
+// 	String:    reflect.String,
+// 	Long:      reflect.Int64,
+// 	Date:      reflect.Int64,
+// 	Timestamp: reflect.Int64,
+// 	Double:    reflect.Float64,
+// 	Binary:    reflect.Array,
+// }
+
+// var reflectKindToDefaultQuestDBType = map[reflect.Kind]QuestDBType{
+// 	reflect.Bool:    Boolean,
+// 	reflect.Int8:    Byte,
+// 	reflect.Int16:   Short,
+// 	reflect.Int32:   Int,
+// 	reflect.Float32: Float,
+// 	reflect.String:  String,
+// 	reflect.Int64:   Long,
+// 	reflect.Float64: Double,
+// 	reflect.Array:   Binary,
+// }
+
+var supportedTypes = []string{
 	string(Boolean),
 	string(Byte),
 	string(Short),
@@ -59,14 +103,15 @@ func toSnakeCase(str string) string {
 	return strings.ToLower(snake)
 }
 
-func StructToLine(a interface{}) (*Line, error) {
-	t := reflect.TypeOf(a)
+func structToLine(a interface{}) (*Line, error) {
+	ty := reflect.TypeOf(a)
+	val := reflect.ValueOf(a)
 
-	if t.Kind() != reflect.Struct {
+	if ty.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("only structs allowed")
 	}
 
-	tableName := fmt.Sprintf("%ss", toSnakeCase(t.Name()))
+	tableName := fmt.Sprintf("%ss", toSnakeCase(ty.Name()))
 	symbols := map[string]string{}
 	columns := map[string]string{}
 	now := time.Now()
@@ -78,49 +123,141 @@ func StructToLine(a interface{}) (*Line, error) {
 
 	fmt.Printf("%s", tableName)
 
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag := field.Tag.Get(tagName)
+	for i := 0; i < ty.NumField(); i++ {
+		field := ty.Field(i)
+		val := val.Field(i)
 
-		fmt.Printf("%d. %v (%v), tag: '%v'\n", i+1, field.Name, field.Type.Name(), tag)
+		col, err := fieldToColumn(field, val.Interface())
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", field.Name, err)
+		}
+
+		if col.qdbType == Symbol {
+			symbols[col.name] = col.valueStr
+		} else {
+			columns[col.name] = col.valueStr
+		}
 	}
-
-	fmt.Println("Type:", t.Name())
-	fmt.Println("Kind:", t.Kind())
 
 	l := NewLine(tableName, symbols, columns, now)
 
 	return l, nil
 }
 
-type tag struct {
-	fieldName string
-	qdb_type  QuestDBType
+type column struct {
+	name     string `qdb:"name,long"`
+	qdbType  QuestDBType
+	value    interface{}
+	valueStr string
 }
 
-func tagStringToTag(tagStr string) (tag, error) {
-	t := tag{}
+func fieldToColumn(field reflect.StructField, value interface{}) (*column, error) {
+	tagStr := field.Tag.Get(tagName)
 	tagProps := strings.Split(tagStr, ",")
-	if len(tagProps) == 0 {
-		return t, nil
+
+	if len(tagProps) != 2 {
+		return nil, fmt.Errorf("%s: invalid tag length (expected 2 comma delimited items but got %d)", field.Name, len(tagProps))
 	}
-	if len(tagProps) == 1 {
-		t.fieldName = tagProps[0]
-		return t, nil
+
+	col := &column{}
+
+	qdbColumnName := tagProps[0]
+	qdbColumnType := tagProps[1]
+	if !isValidQuestDBType(qdbColumnType) {
+		return col, fmt.Errorf("%s: unsupported tag type %s", field.Name, qdbColumnType)
 	}
-	if len(tagProps) == 2 {
-		if !isValidQuestDBType(tagProps[1]) {
-			return t, fmt.Errorf("unsupported type")
+
+	col.name = qdbColumnName
+	col.qdbType = QuestDBType(qdbColumnType)
+	col.value = value
+
+	valStr, err := marshalIntoLineFormat(qdbColumnName, value, col.qdbType)
+	if err != nil {
+		return nil, fmt.Errorf("could not marshal type %t into questdb type %s: %w", value, col.qdbType, err)
+	}
+	col.valueStr = valStr
+
+	return col, nil
+}
+
+func marshalIntoLineFormat(columnName string, value interface{}, qdbType QuestDBType) (string, error) {
+	outStr := ""
+	switch val := value.(type) {
+	case bool:
+		if qdbType != Boolean {
+			return "", fmt.Errorf("type in tag is not boolean")
 		}
-		t.fieldName = tagProps[0]
-		t.qdb_type = QuestDBType(tagProps[1])
-		return t, nil
+		if val {
+			outStr = "t"
+		} else {
+			outStr = "f"
+		}
+	case string:
+		if qdbType != String && qdbType != Symbol {
+			return "", fmt.Errorf("type in tag is not Symbol or String")
+		}
+
+		if qdbType == String {
+			outStr = fmt.Sprintf("\"%s\"", val)
+		} else {
+			outStr = val
+		}
+	case byte:
+		if qdbType != Byte {
+			return "", fmt.Errorf("type in tag is not Byte")
+		}
+
+		outStr = fmt.Sprintf("%d", val)
+	case int16:
+		if qdbType != Short {
+			return "", fmt.Errorf("type in tag is not Short")
+		}
+
+		outStr = fmt.Sprintf("%d", val)
+	case int32:
+		if qdbType != Int {
+			return "", fmt.Errorf("type in tag is not Int")
+		}
+
+		outStr = fmt.Sprintf("%d", val)
+	case int64:
+		if qdbType != Long {
+			return "", fmt.Errorf("type in tag is not Long")
+		}
+
+		outStr = fmt.Sprintf("%di", val)
+	case float32:
+		if qdbType != Float {
+			return "", fmt.Errorf("type in tag is not Float")
+		}
+
+		outStr = fmt.Sprintf("%f", val)
+
+	case float64:
+		if qdbType != Double {
+			return "", fmt.Errorf("type in tag is not Double")
+		}
+
+		outStr = fmt.Sprintf("%f", val)
+	case time.Time:
+		if qdbType != Date && qdbType != Timestamp {
+			return "", fmt.Errorf("type in tag is not Date or Timestamp")
+		}
+
+		if qdbType == Date {
+			outStr = fmt.Sprintf("%d", val.UnixMilli())
+		} else {
+			outStr = fmt.Sprintf("%d", val.UnixMicro())
+		}
+	default:
+		return "", fmt.Errorf("type of field is not supported")
 	}
-	return t, fmt.Errorf("invalid 'qdb' struct tag")
+
+	return outStr, nil
 }
 
 func isValidQuestDBType(str string) bool {
-	for _, kind := range supportedKinds {
+	for _, kind := range supportedTypes {
 		if str == kind {
 			return true
 		}

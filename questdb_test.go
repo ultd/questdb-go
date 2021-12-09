@@ -48,10 +48,10 @@ func TestClientWriteDataThenRead(t *testing.T) {
 	assert.Nil(t, err)
 
 	now := time.Now()
-	err = client.Write(fmt.Sprintf("table_abc,symbol_a=abcd1234 col_a=42323532i,col_b=f,ts=%dt %d\n", now.UnixMicro(), now.UnixNano()))
+	err = client.WriteMessage(fmt.Sprintf("table_abc,symbol_a=abcd1234 col_a=42323532i,col_b=f,ts=%dt %d\n", now.UnixMicro(), now.UnixNano()))
 	assert.Nil(t, err)
 
-	row := client.QueryRow(context.Background(), "SELECT col_a FROM table_abc WHERE symbol_a = 'abcd1234'")
+	row := client.DB().QueryRowContext(context.Background(), "SELECT col_a FROM table_abc WHERE symbol_a = 'abcd1234'")
 
 	err = row.Err()
 	assert.Nil(t, err)

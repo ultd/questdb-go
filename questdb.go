@@ -1,7 +1,6 @@
 package questdb
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -101,7 +100,7 @@ func (c *Client) Close() error {
 }
 
 // Write func takes a message and writes it to the underlying InfluxDB line protocol
-func (c *Client) Write(message string) error {
+func (c *Client) WriteMessage(message string) error {
 	_, err := c.ilpConn.Write([]byte(message))
 	if err != nil {
 		return err
@@ -109,20 +108,36 @@ func (c *Client) Write(message string) error {
 	return nil
 }
 
+func (c *Client) Write(a interface{}) error {
+	l, err := structToLine(a)
+	if err != nil {
+		return err
+	}
+	_, err = c.ilpConn.Write([]byte(l.String()))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) DB() *sql.DB {
+	return c.pgSqlDB
+}
+
 // QueryRow func takes a context and a query statement and returns a *sql.Row after
 // executing the query to the underlying Postgres Wire protocol sql database connection
-func (c *Client) QueryRow(ctx context.Context, query string) *sql.Row {
-	row := c.pgSqlDB.QueryRowContext(ctx, query)
-	return row
-}
+// func (c *Client) QueryRow(ctx context.Context, query string) *sql.Row {
+// 	row := c.pgSqlDB.QueryRowContext(ctx, query)
+// 	return row
+// }
 
 // QueryRows func takes a context and a query statement and returns a *sql.Rows and possible error
 // after executing the query to the underlying Postgres Wire protocol sql database connection
-func (c *Client) QueryRows(ctx context.Context, query string) (*sql.Rows, error) {
-	rows, err := c.pgSqlDB.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
+// func (c *Client) QueryRows(ctx context.Context, query string) (*sql.Rows, error) {
+// 	rows, err := c.pgSqlDB.QueryContext(ctx, query)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return rows, nil
-}
+// 	return rows, nil
+// }
