@@ -109,7 +109,7 @@ func (c *Client) WriteMessage(message string) error {
 }
 
 func (c *Client) Write(a interface{}) error {
-	l, err := structToLine(a)
+	l, err := StructToLine(a)
 	if err != nil {
 		return err
 	}

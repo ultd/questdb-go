@@ -22,7 +22,7 @@ func TestStructToLine(t *testing.T) {
 			AccountUUID: uuid.New().String(),
 			Age:         29,
 		}
-		l, err := structToLine(a)
+		l, err := StructToLine(a)
 		assert.Nil(t, err)
 		assert.NotNil(t, l)
 		t.Log(l.String())
