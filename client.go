@@ -99,45 +99,29 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// Write func takes a message and writes it to the underlying InfluxDB line protocol
-func (c *Client) WriteMessage(message string) error {
-	_, err := c.ilpConn.Write([]byte(message))
+// WriteMessage func takes a message and writes it to the underlying InfluxDB line protocol
+func (c *Client) WriteMessage(message []byte) error {
+	_, err := c.ilpConn.Write(message)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
+// Write takes a valid struct with qdb tags and writes it to the underlying InfluxDB line protocol
 func (c *Client) Write(a interface{}) error {
-	l, err := StructToLine(a)
+	m, err := NewModelFromStruct(a)
 	if err != nil {
 		return err
 	}
-	_, err = c.ilpConn.Write([]byte(l.String()))
+	_, err = c.ilpConn.Write(m.MarshalLineMessage())
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
+// DB func returns the underlying *sql.DB struct for DB operations over the Postgres wire protocol
 func (c *Client) DB() *sql.DB {
 	return c.pgSqlDB
 }
-
-// QueryRow func takes a context and a query statement and returns a *sql.Row after
-// executing the query to the underlying Postgres Wire protocol sql database connection
-// func (c *Client) QueryRow(ctx context.Context, query string) *sql.Row {
-// 	row := c.pgSqlDB.QueryRowContext(ctx, query)
-// 	return row
-// }
-
-// QueryRows func takes a context and a query statement and returns a *sql.Rows and possible error
-// after executing the query to the underlying Postgres Wire protocol sql database connection
-// func (c *Client) QueryRows(ctx context.Context, query string) (*sql.Rows, error) {
-// 	rows, err := c.pgSqlDB.QueryContext(ctx, query)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return rows, nil
-// }
