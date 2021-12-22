@@ -8,7 +8,7 @@ import (
 )
 
 type User struct {
-	IgnoredField uint          `qdb:"-"`
+	IgnoredField string        `qdb:"-"`
 	Name         string        `qdb:"name;string"`
 	Email        string        `qdb:"email;symbol"`
 	EmailME2     string        `qdb:"email_me_2;string"`
@@ -25,9 +25,9 @@ type Options struct {
 	LengthMax string `qdb:"length_max;string"`
 }
 
-func (u User) TableName() string {
-	return "users"
-}
+// func (u User) TableName() string {
+// 	return "users"
+// }
 
 func (u User) CreateTableOptions() questdb.CreateTableOptions {
 	return questdb.CreateTableOptions{
@@ -54,12 +54,12 @@ func main() {
 	}
 
 	// create a model from struct
-	model, err := questdb.NewModel(User{})
+	model, err := questdb.NewModel(user)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(model.CreateTableIfNotExistStatement())
+	// fmt.Println(model.CreateTableIfNotExistStatement())
 
 	// instantiate a QuestDB cleint
 	client := questdb.Default()
@@ -94,6 +94,6 @@ func main() {
 	}
 
 	// print our user
-	fmt.Printf("User.Body: %v\n", string(out.Body))
+	fmt.Printf("User: %v\n", out)
 
 }
