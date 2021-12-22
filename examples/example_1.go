@@ -8,15 +8,16 @@ import (
 )
 
 type User struct {
-	Name       string    `qdb:"name;string"`
-	Email      string    `qdb:"email;symbol"`
-	EmailME2   string    `qdb:"email_me_2;string"`
-	Age        int16     `qdb:"age;short"`
-	LongNumber int       `qdb:"long_num;long"`
-	Birthday   time.Time `qdb:"birthday;timestamp"`
-	TS         time.Time `qdb:"ts;timestamp;designatedTS:true"`
-	Body       []byte    `qdb:"body;binary"`
-	Options    Options   `qdb:"options;embedded;embeddedPrefix:opts_"`
+	IgnoredField uint          `qdb:"-"`
+	Name         string        `qdb:"name;string"`
+	Email        string        `qdb:"email;symbol"`
+	EmailME2     string        `qdb:"email_me_2;string"`
+	Age          int16         `qdb:"age;short"`
+	LongNumber   int           `qdb:"long_num;long"`
+	Birthday     time.Time     `qdb:"birthday;timestamp"`
+	TS           time.Time     `qdb:"ts;timestamp;designatedTS:true"`
+	Body         questdb.Bytes `qdb:"body;binary"`
+	Options      Options       `qdb:"options;embedded;embeddedPrefix:opts_"`
 }
 
 type Options struct {
@@ -58,6 +59,8 @@ func main() {
 		panic(err)
 	}
 
+	fmt.Println(model.CreateTableIfNotExistStatement())
+
 	// instantiate a QuestDB cleint
 	client := questdb.Default()
 
@@ -91,6 +94,6 @@ func main() {
 	}
 
 	// print our user
-	fmt.Printf("User: %v\n", out)
+	fmt.Printf("User.Body: %v\n", string(out.Body))
 
 }
