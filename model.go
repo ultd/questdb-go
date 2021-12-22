@@ -19,6 +19,7 @@ type Model struct {
 	createTableOptions *CreateTableOptions
 }
 
+// field struct represents a field within a valid qdb tagged struct
 type field struct {
 	isZero          bool
 	name            string

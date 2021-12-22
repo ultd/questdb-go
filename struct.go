@@ -27,6 +27,10 @@ func structToFieldSlice(fieldPrefix, colPrefix string, ty reflect.Type, val refl
 		fieldName := fieldPrefix + fieldType.Name
 
 		tagStr := fieldType.Tag.Get(tagName)
+		// skip fields that are marked to ignore
+		if tagStr == "-" {
+			continue
+		}
 		tagProps := strings.Split(tagStr, ";")
 
 		if len(tagProps) < 2 {

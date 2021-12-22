@@ -114,6 +114,8 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 		}
 	case Binary:
 		switch val := v.(type) {
+		case Bytes:
+			return fmt.Sprintf("\"%s\"", base64.StdEncoding.EncodeToString(val)), nil
 		case string:
 			return fmt.Sprintf("\"%s\"", base64.StdEncoding.EncodeToString([]byte(val))), nil
 		case []byte:
