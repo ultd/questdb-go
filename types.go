@@ -61,7 +61,7 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 	case Short:
 		switch val := v.(type) {
 		case uint8, int8, int16:
-			return fmt.Sprintf("%d", val), nil
+			return fmt.Sprintf("%di", val), nil
 		}
 	case Char:
 		switch val := v.(type) {
@@ -71,7 +71,7 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 	case Int:
 		switch val := v.(type) {
 		case uint8, int8, uint16, int16, int32:
-			return fmt.Sprintf("%d", val), nil
+			return fmt.Sprintf("%di", val), nil
 		}
 	case Float:
 		switch val := v.(type) {
@@ -103,9 +103,9 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 	case Timestamp:
 		switch val := v.(type) {
 		case int64:
-			return fmt.Sprintf("%d", val), nil
+			return fmt.Sprintf("%dt", val), nil
 		case time.Time:
-			return fmt.Sprintf("%d", val.UnixMicro()), nil
+			return fmt.Sprintf("%dt", val.UnixMicro()), nil
 		}
 	case Double:
 		switch val := v.(type) {

@@ -110,11 +110,11 @@ func (c *Client) WriteMessage(message []byte) error {
 
 // Write takes a valid struct with qdb tags and writes it to the underlying InfluxDB line protocol
 func (c *Client) Write(a interface{}) error {
-	m, err := NewModelFromStruct(a)
+	m, err := NewModel(a)
 	if err != nil {
 		return err
 	}
-	_, err = c.ilpConn.Write(m.MarshalLineMessage())
+	_, err = c.ilpConn.Write(m.MarshalLine())
 	if err != nil {
 		return err
 	}

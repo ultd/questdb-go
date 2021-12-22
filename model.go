@@ -1,6 +1,7 @@
 package questdb
 
 import (
+	"database/sql"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -8,6 +9,7 @@ import (
 	"time"
 )
 
+// Model represents a struct's model
 type Model struct {
 	tableName          string
 	fields             []*field
@@ -28,6 +30,8 @@ type field struct {
 	tagOptions      tagOptions
 }
 
+// PartitionOption is a string which is used in CreateTableOptions struct
+// for specifying the partition by strategy
 type PartitionOption string
 
 const (
@@ -37,12 +41,16 @@ const (
 	Day   PartitionOption = "DAY"
 )
 
+// CreateTableOptions struct is a struct which specifies options for creating
+// a QuestDB table
 type CreateTableOptions struct {
 	PartitionBy        PartitionOption
 	MaxUncommittedRows int
 	CommitLag          string
 }
 
+// String func prints out the CreateTableOptions in string format which would be appended
+// to the sql create table statement
 func (c *CreateTableOptions) String() string {
 	out := ""
 	if c.PartitionBy != "" {
@@ -62,11 +70,17 @@ func (c *CreateTableOptions) String() string {
 	return out
 }
 
+// CreateTableOptioner is an interface which has a single method
+// CreateTableOptions which returns the CreateTableOptions struct.
+// This is used when specifying specific options for creating a table
+// in QuestDB world.
 type CreateTableOptioner interface {
 	CreateTableOptions() CreateTableOptions
 }
 
-func NewModelFromStruct(a interface{}) (*Model, error) {
+// NewModel func takes a struct and returns the Model representation of
+// that struct or an optional error
+func NewModel(a interface{}) (*Model, error) {
 	ty := reflect.TypeOf(a)
 	val := reflect.ValueOf(a)
 
@@ -146,10 +160,49 @@ func (m *Model) serialize() error {
 	return nil
 }
 
+// Columns func will take return all the model's fields in column format
+// i.e. "column_1, column_2, column_3, ..."
+func (m *Model) Columns() string {
+	out := ""
+	for i, field := range m.fields {
+		out += field.qdbName
+		if i != len(m.fields)-1 {
+			out += ", "
+		}
+	}
+	return out
+}
+
+// ScanInto func is a helper function which takes a *sql.Row and a dest (an valid qdb model struct)
+// and scans the row values into dest. This will typically be used in conjunction with a select statement
+// which has used (Model).Columns() to specify the columns for selecting.
+func ScanInto(row *sql.Row, dest interface{}) (err error) {
+	m, err := NewModel(dest)
+	if err != nil {
+		return fmt.Errorf("could not make model from dest: %w", err)
+	}
+	return row.Scan(m.destinations()...)
+}
+
+func (m *Model) destinations() []interface{} {
+	addrs := []interface{}{}
+	for _, field := range m.fields {
+		addrs = append(addrs, field.value.Addr().Interface())
+	}
+	return addrs
+}
+
+// CreateTableIfNotExistStatement func returns the sql create table statement for
+// the Model
 func (m *Model) CreateTableIfNotExistStatement() string {
 	out := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" ( `, m.tableName)
 	for i, field := range m.fields {
-		out += fmt.Sprintf("\"%s\" %s", field.qdbName, field.qdbType)
+		qdbType := field.qdbType
+		// currently encoding binary as base64 encoded string
+		if qdbType == Binary {
+			qdbType = String
+		}
+		out += fmt.Sprintf("\"%s\" %s", field.qdbName, qdbType)
 		if i != len(m.fields)-1 {
 			out += ", "
 		}
@@ -212,6 +265,13 @@ func (m *Model) buildColumns() string {
 	out := ""
 	n := 0
 	for _, field := range fields {
+		// skip including this in columns field as it will be included in the timestamp section of
+		// line message:
+		// 			 <table name>,<symbols,...> <columns,...> <timestamp>
+		// 												here ----^
+		if field.tagOptions.designatedTS {
+			continue
+		}
 		out += fmt.Sprintf("%s=%s", field.qdbName, field.valueSerialized)
 		if n != len(fields)-1 {
 			out += ","
@@ -225,15 +285,18 @@ func (m *Model) buildColumns() string {
 func (m *Model) buildTimestamp() string {
 	if m.designatedTS != nil && m.designatedTS.value.IsValid() {
 		designatedTSTime, ok := m.designatedTS.value.Interface().(time.Time)
-		if !ok {
-			return ""
+		if ok {
+			if !designatedTSTime.IsZero() {
+				return fmt.Sprintf("%d", designatedTSTime.UnixNano())
+			}
 		}
-		return fmt.Sprintf("%d", designatedTSTime.UnixNano())
 	}
 	return ""
 }
 
-func (m *Model) MarshalLineMessage() []byte {
+// MarshalLine func marshals Model's underlying struct values into Influx Line Protocol
+// message serialization format to be written to the QuestDB ILP port for ingestion.
+func (m *Model) MarshalLine() (msg []byte) {
 	symbolsString := m.buildSymbols()
 	columnsString := m.buildColumns()
 	timestampString := m.buildTimestamp()
