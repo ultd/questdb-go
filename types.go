@@ -2,6 +2,7 @@ package questdb
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -26,6 +27,8 @@ var (
 	Symbol QuestDBType = "symbol"
 	// variable length string
 	String QuestDBType = "string"
+	// variable length JSON string
+	JSON QuestDBType = "json"
 	// 64-bit signed integer (0x8000000000000000L to 0x7fffffffffffffffL)
 	Long QuestDBType = "long"
 	// 64-bit signed offset in milliseconds from Unix Epoch
@@ -121,6 +124,12 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 		case []byte:
 			return fmt.Sprintf("\"%s\"", base64.StdEncoding.EncodeToString(val)), nil
 		}
+	case JSON:
+		by, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("could not json marshal %T: %w", v, err)
+		}
+		return fmt.Sprintf("\"%s\"", base64.StdEncoding.EncodeToString(by)), nil
 	}
 	return "", fmt.Errorf("type %T is not compatible with %s", v, qdbType)
 }
@@ -139,7 +148,8 @@ var supportedQDBTypes = []QuestDBType{
 	Timestamp,
 	Double,
 	Binary,
-	Long256,
+	JSON,
+	// Long256,
 }
 
 // TableNamer is an interface which has a single method, TableName, which
@@ -157,4 +167,43 @@ func isValidAndSupportedQuestDBType(str QuestDBType) bool {
 		}
 	}
 	return false
+}
+
+// isSerializableType takes a v interface{} and returns a bool which represents
+// whether or not v can be serialized into Influx line protocol message value.
+func IsSerializableType(v interface{}) bool {
+	switch v.(type) {
+	case bool, int8, uint8, int16, uint16, int32, uint32, int64, uint64, int,
+		float32, float64, string, Bytes, time.Time:
+		return true
+	default:
+		return false
+	}
+}
+
+// JSONScanner func is a helper func which will scan src into
+// dest by first base64 decoding src and then json unmarshaling
+// into dest.
+//
+// This is meant to be used inside Scan func to allow for
+// JSON fields to be unmarshaled properly.
+func JSONScanner(src interface{}, dest interface{}) error {
+	switch val := src.(type) {
+	case []byte:
+		into := []byte{}
+		_, err := base64.StdEncoding.Decode(into, val)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(into, dest)
+	case string:
+		into := []byte{}
+		_, err := base64.StdEncoding.Decode(into, []byte(val))
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(into, dest)
+	default:
+		return fmt.Errorf("cannot json unmarshal type %T", val)
+	}
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"time"
 )
 
 func structToFieldSlice(fieldPrefix, colPrefix string, ty reflect.Type, val reflect.Value) ([]*field, error) {
@@ -82,16 +81,4 @@ func structToFieldSlice(fieldPrefix, colPrefix string, ty reflect.Type, val refl
 	}
 
 	return fields, nil
-}
-
-// isSerializableType takes a v interface{} and returns a bool which represents
-// whether or not v can be serialized into Influx line protocol message value.
-func IsSerializableType(v interface{}) bool {
-	switch v.(type) {
-	case bool, int8, uint8, int16, uint16, int32, uint32, int64, uint64, int, uint,
-		float32, float64, string, []byte, time.Time:
-		return true
-	default:
-		return false
-	}
 }

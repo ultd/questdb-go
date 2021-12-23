@@ -44,9 +44,7 @@ type tagOptions struct {
 
 // makeTagOptions func takes a tagOpts []string and returns a tagOptions struct
 func makeTagOptions(f *field, tagsOpts []string) (tagOptions, error) {
-	opts := tagOptions{
-		embeddedPrefix: "",
-	}
+	opts := tagOptions{}
 
 	// embeddedPrefix
 	embeddedPrefix := getOption(tagsOpts, "embeddedPrefix")

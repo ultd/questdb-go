@@ -18,6 +18,7 @@ type User struct {
 	TS           time.Time     `qdb:"ts;timestamp;designatedTS:true"`
 	Body         questdb.Bytes `qdb:"body;binary"`
 	Options      Options       `qdb:"options;embedded;embeddedPrefix:opts_"`
+	JSONField    TestJSON      `qdb:"json_field;json"`
 }
 
 type Options struct {
@@ -25,9 +26,18 @@ type Options struct {
 	LengthMax string `qdb:"length_max;string"`
 }
 
-// func (u User) TableName() string {
-// 	return "users"
-// }
+type TestJSON struct {
+	ABC int    `json:"abc"`
+	XYZ string `json:"xyz"`
+}
+
+func (t *TestJSON) Scan(src interface{}) error {
+	return questdb.JSONScanner(src, t)
+}
+
+func (u User) TableName() string {
+	return "users"
+}
 
 func (u User) CreateTableOptions() questdb.CreateTableOptions {
 	return questdb.CreateTableOptions{
@@ -51,6 +61,10 @@ func main() {
 			LengthMax: "455",
 			MaxAge:    4325,
 		},
+		JSONField: TestJSON{
+			ABC: 245,
+			XYZ: "This is a test",
+		},
 	}
 
 	// create a model from struct
@@ -59,7 +73,7 @@ func main() {
 		panic(err)
 	}
 
-	// fmt.Println(model.CreateTableIfNotExistStatement())
+	fmt.Println(model.CreateTableIfNotExistStatement())
 
 	// instantiate a QuestDB cleint
 	client := questdb.Default()

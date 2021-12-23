@@ -200,7 +200,7 @@ func (m *Model) CreateTableIfNotExistStatement() string {
 	for i, field := range m.fields {
 		qdbType := field.qdbType
 		// currently encoding binary as base64 encoded string
-		if qdbType == Binary {
+		if qdbType == Binary || qdbType == JSON {
 			qdbType = String
 		}
 		out += fmt.Sprintf("\"%s\" %s", field.qdbName, qdbType)
@@ -265,6 +265,10 @@ func (m *Model) buildColumns() string {
 
 	out := ""
 	n := 0
+	// decrement one from n counter if designated field is not nil
+	if m.designatedTS != nil {
+		n = 1
+	}
 	for _, field := range fields {
 		// skip including this in columns field as it will be included in the timestamp section of
 		// line message:
