@@ -190,19 +190,17 @@ func IsSerializableType(v interface{}) bool {
 func JSONScanner(src interface{}, dest interface{}) error {
 	switch val := src.(type) {
 	case []byte:
-		into := []byte{}
-		_, err := base64.StdEncoding.Decode(into, val)
+		by, err := base64.StdEncoding.DecodeString(string(val))
 		if err != nil {
 			return err
 		}
-		return json.Unmarshal(into, dest)
+		return json.Unmarshal(by, dest)
 	case string:
-		into := []byte{}
-		_, err := base64.StdEncoding.Decode(into, []byte(val))
+		by, err := base64.StdEncoding.DecodeString(val)
 		if err != nil {
 			return err
 		}
-		return json.Unmarshal(into, dest)
+		return json.Unmarshal(by, dest)
 	default:
 		return fmt.Errorf("cannot json unmarshal type %T", val)
 	}
