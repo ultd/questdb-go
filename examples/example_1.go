@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -31,8 +33,23 @@ type TestJSON struct {
 	XYZ string `json:"xyz"`
 }
 
-func (t *TestJSON) Scan(src interface{}) error {
-	return questdb.JSONScanner(src, t)
+func (t *TestJSON) QDBScan(src interface{}) error {
+	switch val := src.(type) {
+	case []byte:
+		by, err := base64.StdEncoding.DecodeString(string(val))
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(by, t)
+	case string:
+		by, err := base64.StdEncoding.DecodeString(val)
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(by, t)
+	default:
+		return fmt.Errorf("cannot json unmarshal type %T", val)
+	}
 }
 
 func (u User) TableName() string {

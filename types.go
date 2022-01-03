@@ -29,6 +29,8 @@ var (
 	String QuestDBType = "string"
 	// variable length JSON string
 	JSON QuestDBType = "json"
+	// type that implements EncoderDecoder interface
+	Encoded QuestDBType = "encoded"
 	// 64-bit signed integer (0x8000000000000000L to 0x7fffffffffffffffL)
 	Long QuestDBType = "long"
 	// 64-bit signed offset in milliseconds from Unix Epoch
@@ -178,30 +180,5 @@ func IsSerializableType(v interface{}) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// JSONScanner func is a helper func which will scan src into
-// dest by first base64 decoding src and then json unmarshaling
-// into dest.
-//
-// This is meant to be used inside Scan func to allow for
-// JSON fields to be unmarshaled properly.
-func JSONScanner(src interface{}, dest interface{}) error {
-	switch val := src.(type) {
-	case []byte:
-		by, err := base64.StdEncoding.DecodeString(string(val))
-		if err != nil {
-			return err
-		}
-		return json.Unmarshal(by, dest)
-	case string:
-		by, err := base64.StdEncoding.DecodeString(val)
-		if err != nil {
-			return err
-		}
-		return json.Unmarshal(by, dest)
-	default:
-		return fmt.Errorf("cannot json unmarshal type %T", val)
 	}
 }
