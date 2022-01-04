@@ -13,6 +13,7 @@ import (
 type Model struct {
 	tableName          string
 	fields             []*field
+	indexFields        []*field
 	typ                reflect.Type
 	val                reflect.Value
 	designatedTS       *field
@@ -124,6 +125,9 @@ func NewModel(a interface{}) (*Model, error) {
 			}
 			field2 := field
 			m.designatedTS = field2
+		}
+		if field.tagOptions.index == true {
+			m.indexFields = append(m.indexFields, field)
 		}
 	}
 
@@ -282,6 +286,8 @@ func (m *Model) destinations() []interface{} {
 // the Model
 func (m *Model) CreateTableIfNotExistStatement() string {
 	out := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" ( `, m.tableName)
+
+	// add each qdb column to the create table statement's column definition
 	for i, field := range m.fields {
 		qdbType := field.qdbType
 		// currently encoding binary as base64 encoded string
@@ -293,19 +299,39 @@ func (m *Model) CreateTableIfNotExistStatement() string {
 			out += ", "
 		}
 	}
+
+	// add default designated timestamp field
 	if m.designatedTS == nil {
 		out += ", \"timestamp\" timestamp"
 	}
 	out += " ) "
+
+	// if index fields, add them to statement
+	indexFieldsLen := len(m.indexFields)
+	if indexFieldsLen > 0 {
+		for i, field := range m.indexFields {
+			out += fmt.Sprintf("index(%s) ", field.qdbName)
+			if i != indexFieldsLen-1 {
+				out += ","
+			}
+		}
+	}
+
+	// if designatedTS is specified, add to statement, else use default designated TS field
 	if m.designatedTS == nil {
 		out += "timestamp(timestamp) "
 	} else {
 		out += fmt.Sprintf("timestamp(%s) ", m.designatedTS.qdbName)
 	}
+
+	// if some create table options exists, add them to statement
 	if m.createTableOptions != nil {
 		out += m.createTableOptions.String()
 	}
+
+	// end statement
 	out += ";"
+
 	return out
 }
 

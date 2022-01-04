@@ -40,6 +40,7 @@ type tagOptions struct {
 	embeddedPrefix  string
 	designatedTS    bool
 	commitZeroValue bool
+	index           bool
 }
 
 // makeTagOptions func takes a tagOpts []string and returns a tagOptions struct
@@ -65,6 +66,15 @@ func makeTagOptions(f *field, tagsOpts []string) (tagOptions, error) {
 	commitZeroValueField := getOption(tagsOpts, "commitZeroValue")
 	if commitZeroValueField == "true" {
 		opts.commitZeroValue = true
+	}
+
+	// index field
+	indexField := getOption(tagsOpts, "index")
+	if indexField == "true" {
+		if f.qdbType != Symbol {
+			return opts, fmt.Errorf("type must be symbol not %s in order to index field", f.qdbType)
+		}
+		opts.index = true
 	}
 
 	return opts, nil
