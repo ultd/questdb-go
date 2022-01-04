@@ -126,7 +126,7 @@ func NewModel(a interface{}) (*Model, error) {
 			field2 := field
 			m.designatedTS = field2
 		}
-		if field.tagOptions.index == true {
+		if field.tagOptions.index {
 			m.indexFields = append(m.indexFields, field)
 		}
 	}
