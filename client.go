@@ -125,3 +125,21 @@ func (c *Client) Write(a interface{}) error {
 func (c *Client) DB() *sql.DB {
 	return c.pgSqlDB
 }
+
+// CreateTableIfNotExists func takes a valid 'qdb' tagged struct v and attempts to create the table
+// (via the PG wire) in QuestDB and returns an possible error
+func (c *Client) CreateTableIfNotExists(v interface{}) error {
+	// make model from v
+	model, err := NewModel(v)
+	if err != nil {
+		return fmt.Errorf("could not make new model: %w", err)
+	}
+
+	// execute create table if not exists statement
+	_, err = c.DB().Exec(model.CreateTableIfNotExistStatement())
+	if err != nil {
+		return fmt.Errorf("could not execute sql statement: %w", err)
+	}
+
+	return nil
+}
