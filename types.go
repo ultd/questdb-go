@@ -132,6 +132,8 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 			return "", fmt.Errorf("could not json marshal %T: %w", v, err)
 		}
 		return fmt.Sprintf("\"%s\"", base64.StdEncoding.EncodeToString(by)), nil
+	default:
+		return "", fmt.Errorf("type %T is not compatible with %s", v, qdbType)
 	}
 	return "", fmt.Errorf("type %T is not compatible with %s", v, qdbType)
 }

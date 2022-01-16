@@ -1,9 +1,16 @@
 package questdb
 
 import (
+	"bufio"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 
 	_ "github.com/lib/pq"
@@ -11,8 +18,10 @@ import (
 
 // Config is a struct which holds Client's config fields
 type Config struct {
-	ILPHost   string
-	PGConnStr string
+	ILPHost           string
+	ILPAuthPrivateKey string
+	ILPAuthKid        string
+	PGConnStr         string
 }
 
 // Client struct represents a QuestDB client connection. This encompasses the InfluxDB Line
@@ -30,8 +39,10 @@ type Client struct {
 func Default() *Client {
 	return &Client{
 		config: Config{
-			ILPHost:   "localhost:9009",
-			PGConnStr: "postgresql://admin:quest@localhost:8812/qdb?sslmode=disable",
+			ILPHost:           "localhost:9009",
+			ILPAuthPrivateKey: "",
+			ILPAuthKid:        "",
+			PGConnStr:         "postgresql://admin:quest@localhost:8812/qdb?sslmode=disable",
 		},
 	}
 }
@@ -50,7 +61,7 @@ var (
 )
 
 // Connect func dials and connects both the Influx line protocol TCP connection as well
-// as the underlying sql pg database connection.
+// as the underlying sql PG database connection.
 func (c *Client) Connect() error {
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", c.config.ILPHost)
 	if err != nil {
@@ -60,6 +71,52 @@ func (c *Client) Connect() error {
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrILPNetDial, err)
+	}
+
+	if c.config.ILPAuthPrivateKey != "" {
+		if c.config.ILPAuthKid == "" {
+			return fmt.Errorf("cannot authenticate ilp without 'ILPAuthKid' set in config")
+		}
+
+		// Parse and create private key
+		keyRaw, err := base64.RawURLEncoding.DecodeString(c.config.ILPAuthPrivateKey)
+		if err != nil {
+			return fmt.Errorf("could not base64 decode ilp private key: %w", err)
+		}
+		key := new(ecdsa.PrivateKey)
+		key.PublicKey.Curve = elliptic.P256()
+		key.PublicKey.X, key.PublicKey.Y = key.PublicKey.Curve.ScalarBaseMult(keyRaw)
+		key.D = new(big.Int).SetBytes(keyRaw)
+
+		// send key ID
+
+		reader := bufio.NewReader(conn)
+		_, err = conn.Write([]byte(c.config.ILPAuthKid + "\n"))
+		if err != nil {
+			return fmt.Errorf("could not write to ilp tcp conn: %w", err)
+		}
+
+		raw, err := reader.ReadBytes('\n')
+		if err != nil {
+			return fmt.Errorf("could not read from ilp conn: %w", err)
+		}
+		// Remove the `\n` is last position
+		raw = raw[:len(raw)-1]
+
+		// Hash the challenge with sha256
+		hash := crypto.SHA256.New()
+		hash.Write(raw)
+		hashed := hash.Sum(nil)
+
+		a, b, err := ecdsa.Sign(rand.Reader, key, hashed)
+		if err != nil {
+			return fmt.Errorf("could not ecdsa sign key: %w", err)
+		}
+		stdSig := append(a.Bytes(), b.Bytes()...)
+		_, err = conn.Write([]byte(base64.StdEncoding.EncodeToString(stdSig) + "\n"))
+		if err != nil {
+			return fmt.Errorf("could not write to ilp tcp conn: %w", err)
+		}
 	}
 
 	c.ilpConn = conn
@@ -114,7 +171,8 @@ func (c *Client) Write(a interface{}) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.ilpConn.Write(m.MarshalLine())
+	line := m.MarshalLine()
+	_, err = c.ilpConn.Write(line)
 	if err != nil {
 		return err
 	}

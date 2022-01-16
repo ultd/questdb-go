@@ -115,7 +115,7 @@ func NewModel(a interface{}) (*Model, error) {
 
 	fields, err := structToFieldSlice("", "", ty, val)
 	if err != nil {
-		return nil, fmt.Errorf("could not make struct into line: %w", err)
+		return nil, fmt.Errorf("could not parse field: %w", err)
 	}
 
 	for _, field := range fields {
@@ -219,6 +219,7 @@ func structToFieldSlice(fieldPrefix, colPrefix string, ty reflect.Type, val refl
 
 func (m *Model) serialize() error {
 	for _, field := range m.fields {
+
 		fieldValue := field.value
 		// if fieldValue kind is pointer, get its underlying poited to value
 		if fieldValue.Kind() == reflect.Ptr {
@@ -237,6 +238,7 @@ func (m *Model) serialize() error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", field.name, err)
 		}
+
 		field.valueSerialized = valStr
 	}
 	return nil
@@ -309,10 +311,13 @@ func (m *Model) CreateTableIfNotExistStatement() string {
 	// if index fields, add them to statement
 	indexFieldsLen := len(m.indexFields)
 	if indexFieldsLen > 0 {
+		out += ", "
 		for i, field := range m.indexFields {
-			out += fmt.Sprintf("index(%s) ", field.qdbName)
+			out += fmt.Sprintf("index(%s)", field.qdbName)
 			if i != indexFieldsLen-1 {
-				out += ","
+				out += ", "
+			} else {
+				out += " "
 			}
 		}
 	}
@@ -413,6 +418,7 @@ func (m *Model) buildTimestamp() string {
 // MarshalLine func marshals Model's underlying struct values into Influx Line Protocol
 // message serialization format to be written to the QuestDB ILP port for ingestion.
 func (m *Model) MarshalLine() (msg []byte) {
+	m.serialize()
 	symbolsString := m.buildSymbols()
 	columnsString := m.buildColumns()
 	timestampString := m.buildTimestamp()
