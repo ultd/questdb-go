@@ -268,6 +268,17 @@ func ScanInto(row *sql.Row, dest interface{}) (err error) {
 	return row.Scan(m.destinations()...)
 }
 
+// ScanInto func is a helper function which takes a *sql.Row and a dest (an valid qdb model struct)
+// and scans the row values into dest. This will typically be used in conjunction with a select statement
+// which has used (Model).Columns() to specify the columns for selecting.
+func ScanRows(rows *sql.Rows, dest interface{}) (err error) {
+	m, err := NewModel(dest)
+	if err != nil {
+		return fmt.Errorf("could not make model from dest: %w", err)
+	}
+	return rows.Scan(m.destinations()...)
+}
+
 func (m *Model) destinations() []interface{} {
 	addrs := []interface{}{}
 	for _, field := range m.fields {
