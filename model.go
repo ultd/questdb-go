@@ -41,6 +41,7 @@ const (
 	Year  PartitionOption = "YEAR"
 	Month PartitionOption = "MONTH"
 	Day   PartitionOption = "DAY"
+	Hour  PartitionOption = "HOUR"
 )
 
 // CreateTableOptions struct is a struct which specifies options for creating
