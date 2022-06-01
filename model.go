@@ -391,12 +391,7 @@ func (m *Model) buildColumns() string {
 		}
 	}
 
-	out := ""
-	n := 0
-	// decrement one from n counter if designated field is not nil
-	if m.designatedTS != nil {
-		n = 1
-	}
+	fieldsSerialized := []string{}
 	for _, field := range fields {
 		// skip including this in columns field as it will be included in the timestamp section of
 		// line message:
@@ -405,14 +400,10 @@ func (m *Model) buildColumns() string {
 		if field.tagOptions.designatedTS {
 			continue
 		}
-		out += fmt.Sprintf("%s=%s", field.qdbName, field.valueSerialized)
-		if n != len(fields)-1 {
-			out += ","
-		}
-		n++
+		fieldsSerialized = append(fieldsSerialized, fmt.Sprintf("%s=%s", field.qdbName, field.valueSerialized))
 	}
 
-	return out
+	return strings.Join(fieldsSerialized, ",")
 }
 
 func (m *Model) buildTimestamp() string {
