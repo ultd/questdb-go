@@ -185,12 +185,16 @@ func (c *Client) DB() *sql.DB {
 }
 
 // CreateTableIfNotExists func takes a valid 'qdb' tagged struct v and attempts to create the table
-// (via the PG wire) in QuestDB and returns an possible error
-func (c *Client) CreateTableIfNotExists(v interface{}) error {
+// (via the PG wire) in QuestDB and returns an possible error. You can optionally pass a custom table name.
+func (c *Client) CreateTableIfNotExists(v interface{}, tableName ...string) error {
 	// make model from v
 	model, err := NewModel(v)
 	if err != nil {
 		return fmt.Errorf("could not make new model: %w", err)
+	}
+
+	if len(tableName) > 0 {
+		model.tableName = tableName[0]
 	}
 
 	// execute create table if not exists statement
