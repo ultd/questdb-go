@@ -166,11 +166,21 @@ func (c *Client) WriteMessage(message []byte) error {
 }
 
 // Write takes a valid struct with qdb tags and writes it to the underlying InfluxDB line protocol
-func (c *Client) Write(a interface{}) error {
+func (c *Client) Write(a interface{}, options ...option) error {
 	m, err := NewModel(a)
 	if err != nil {
 		return err
 	}
+
+	if len(options) > 0 {
+		for _, opt := range options {
+			// check and set all options here
+			if opt.tableName != "" {
+				m.tableName = opt.tableName
+			}
+		}
+	}
+
 	line := m.MarshalLine()
 	_, err = c.ilpConn.Write(line)
 	if err != nil {
@@ -186,15 +196,20 @@ func (c *Client) DB() *sql.DB {
 
 // CreateTableIfNotExists func takes a valid 'qdb' tagged struct v and attempts to create the table
 // (via the PG wire) in QuestDB and returns an possible error. You can optionally pass a custom table name.
-func (c *Client) CreateTableIfNotExists(v interface{}, tableName ...string) error {
+func (c *Client) CreateTableIfNotExists(v interface{}, options ...option) error {
 	// make model from v
 	model, err := NewModel(v)
 	if err != nil {
 		return fmt.Errorf("could not make new model: %w", err)
 	}
 
-	if len(tableName) > 0 {
-		model.tableName = tableName[0]
+	if len(options) > 0 {
+		for _, opt := range options {
+			// check and set options here
+			if opt.tableName != "" {
+				model.tableName = opt.tableName
+			}
+		}
 	}
 
 	// execute create table if not exists statement
