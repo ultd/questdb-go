@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -183,6 +184,35 @@ func (c *Client) Write(a interface{}, options ...option) error {
 
 	line := m.MarshalLine()
 	_, err = c.ilpConn.Write(line)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) WriteBatch(rows []interface{}, options ...option) error {
+	var models []*Model
+	for _, row := range rows {
+		m, err := NewModel(row)
+		if err != nil {
+			return err
+		}
+		if len(options) > 0 {
+			for _, opt := range options {
+				// check and set all options here
+				if opt.tableName != "" {
+					m.tableName = opt.tableName
+				}
+			}
+		}
+		models = append(models, m)
+	}
+
+	var sb strings.Builder
+	for _, m := range models {
+		sb.Write(m.MarshalLine())
+	}
+	_, err := c.ilpConn.Write([]byte(sb.String()))
 	if err != nil {
 		return err
 	}
