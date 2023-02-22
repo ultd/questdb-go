@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
 	"errors"
@@ -23,6 +24,7 @@ type Config struct {
 	ILPAuthPrivateKey string
 	ILPAuthKid        string
 	PGConnStr         string
+	TLSConfig         *tls.Config
 }
 
 // Client struct represents a QuestDB client connection. This encompasses the InfluxDB Line
@@ -31,7 +33,7 @@ type Config struct {
 type Client struct {
 	config Config
 	// ilpConn is the TCP connection which allows Client to write data to QuestDB
-	ilpConn *net.TCPConn
+	ilpConn net.Conn
 	// pgSqlDB is the Postgres SQL DB connection which allows to read/query data from QuestDB
 	pgSqlDB *sql.DB
 }
@@ -57,6 +59,7 @@ func New(config Config) (*Client, error) {
 
 var (
 	ErrILPNetDial           = errors.New("could not dial ilp host")
+	ErrILPTLSDial           = errors.New("could not dial tls host")
 	ErrILPNetTCPAddrResolve = errors.New("could not resolve ilp host address")
 	ErrPGOpen               = errors.New("could not open postgres db")
 )
@@ -69,9 +72,18 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("%w: %v", ErrILPNetTCPAddrResolve, err)
 	}
 
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrILPNetDial, err)
+	if c.config.TLSConfig != nil {
+		conn, err := tls.Dial("tcp", c.config.ILPHost, c.config.TLSConfig)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrILPTLSDial, err)
+		}
+		c.ilpConn = conn
+	} else {
+		conn, err := net.DialTCP("tcp", nil, tcpAddr)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrILPNetDial, err)
+		}
+		c.ilpConn = conn
 	}
 
 	if c.config.ILPAuthPrivateKey != "" {
@@ -91,8 +103,8 @@ func (c *Client) Connect() error {
 
 		// send key ID
 
-		reader := bufio.NewReader(conn)
-		_, err = conn.Write([]byte(c.config.ILPAuthKid + "\n"))
+		reader := bufio.NewReader(c.ilpConn)
+		_, err = c.ilpConn.Write([]byte(c.config.ILPAuthKid + "\n"))
 		if err != nil {
 			return fmt.Errorf("could not write to ilp tcp conn: %w", err)
 		}
@@ -114,13 +126,11 @@ func (c *Client) Connect() error {
 			return fmt.Errorf("could not ecdsa sign key: %w", err)
 		}
 		stdSig := append(a.Bytes(), b.Bytes()...)
-		_, err = conn.Write([]byte(base64.StdEncoding.EncodeToString(stdSig) + "\n"))
+		_, err = c.ilpConn.Write([]byte(base64.StdEncoding.EncodeToString(stdSig) + "\n"))
 		if err != nil {
 			return fmt.Errorf("could not write to ilp tcp conn: %w", err)
 		}
 	}
-
-	c.ilpConn = conn
 
 	db, err := sql.Open("postgres", c.config.PGConnStr)
 	if err != nil {

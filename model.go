@@ -47,9 +47,11 @@ const (
 // CreateTableOptions struct is a struct which specifies options for creating
 // a QuestDB table
 type CreateTableOptions struct {
-	PartitionBy        PartitionOption
+	PartitionBy PartitionOption
+	// Deprecated: QuestDB >= v7.0.0 no longer requires this option
 	MaxUncommittedRows int
-	CommitLag          string
+	// Deprecated: QuestDB >= v7.0.0 no longer requires this option
+	CommitLag string
 }
 
 // String func prints out the CreateTableOptions in string format which would be appended
