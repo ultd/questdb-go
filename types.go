@@ -17,7 +17,7 @@ var (
 	Byte QuestDBType = "byte"
 	// 16-bit signed integer (-32768 to 32767)
 	Short QuestDBType = "short"
-	// 16-bit unicode charachter
+	// 16-bit unicode character
 	Char QuestDBType = "char"
 	// 32-bit signed integer (0x80000000 to 0x7fffffff)
 	Int QuestDBType = "int"
@@ -41,6 +41,8 @@ var (
 	Double QuestDBType = "double"
 	// byte array
 	Binary QuestDBType = "binary"
+	// hyphenated uuid string
+	UUID QuestDBType = "uuid"
 	// 256-bit unsigned integer
 	//		unsupported
 	Long256 QuestDBType = "long256"
@@ -132,6 +134,13 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 			return "", fmt.Errorf("could not json marshal %T: %w", v, err)
 		}
 		return fmt.Sprintf("\"%s\"", base64.StdEncoding.EncodeToString(by)), nil
+	case UUID:
+		// sent in as a hyphenated uuid string
+		switch val := v.(type) {
+		case string:
+			return fmt.Sprintf("\"%s\"", val), nil
+		}
+
 	default:
 		return "", fmt.Errorf("type %T is not compatible with %s", v, qdbType)
 	}
@@ -153,6 +162,7 @@ var supportedQDBTypes = []QuestDBType{
 	Double,
 	Binary,
 	JSON,
+	UUID,
 	// Long256,
 }
 
