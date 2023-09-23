@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -88,12 +89,12 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 	case Symbol:
 		switch val := v.(type) {
 		case string:
-			return val, nil
+			return quoteEscape(val, needsEscapeForSymbol, quoteSymbolFn), nil
 		}
 	case String:
 		switch val := v.(type) {
 		case string:
-			return fmt.Sprintf("\"%s\"", val), nil
+			return quoteEscape(val, needsEscapeForStr, quoteStringFn), nil
 		}
 	case Long:
 		switch val := v.(type) {
@@ -145,6 +146,37 @@ func serializeValue(v interface{}, qdbType QuestDBType) (string, error) {
 		return "", fmt.Errorf("type %T is not compatible with %s", v, qdbType)
 	}
 	return "", fmt.Errorf("type %T is not compatible with %s", v, qdbType)
+}
+
+// Quote and escape an ILP input value, returns new string that is properly quoted and escaped.
+func quoteEscape(s string, needsEscape func(byte) bool, quoteFn func(*strings.Builder)) string {
+	var b strings.Builder
+	quoteFn(&b)
+	for i := 0; i < len(s); i++ {
+		if needsEscape(s[i]) {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(s[i])
+	}
+	quoteFn(&b)
+
+	return b.String()
+}
+
+func needsEscapeForStr(c byte) bool {
+	return c == '\n' || c == '\r' || c == '\\' || c == '"'
+}
+
+func quoteStringFn(b *strings.Builder) {
+	b.WriteByte('"')
+}
+
+func needsEscapeForSymbol(c byte) bool {
+	return c == '\n' || c == '\r' || c == '\\' || c == ' ' || c == ',' || c == '='
+}
+
+func quoteSymbolFn(*strings.Builder) {
+	// no op, symbols are not quoted in ILP format
 }
 
 var supportedQDBTypes = []QuestDBType{
